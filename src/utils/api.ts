@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://7cvccltb-3910.inc1.devtunnels.ms';
+const API_BASE_URL = 'hhttps://api.firstwin.top';
 
 export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('admin_token');

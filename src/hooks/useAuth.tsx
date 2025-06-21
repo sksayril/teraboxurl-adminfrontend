@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (credentials: LoginRequest): Promise<boolean> => {
     try {
-      const response = await fetch('https://7cvccltb-3910.inc1.devtunnels.ms/admin/login', {
+      const response = await fetch('hhttps://api.firstwin.top/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
