@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { Plus, X, Crown, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, Crown, Image as ImageIcon, Folder, ExternalLink } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 
-interface PremiumBanner {
-  bannerId: string;
-  imageUrl: string;
-  title: string;
-  description: string;
-  isActive: boolean;
-  linkUrl: string;
+interface PremiumBannerData {
+  path: string;
+  url: string;
+  _id: string;
+}
+
+interface HomeData {
+  thumbnailUrl: {
+    path: string;
+    url: string;
+    _id: string;
+  };
+  premiumBannerUrls: PremiumBannerData[];
+  searchableUrl: string;
 }
 
 const LoadingSpinner = () => (
@@ -31,26 +38,23 @@ const LoadingSpinner = () => (
 );
 
 const PremiumBanner: React.FC = () => {
-  const [banners, setBanners] = useState<PremiumBanner[]>([]);
+  const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [bannerForm, setBannerForm] = useState({
-    title: '',
-    description: '',
-    linkUrl: '',
-    image: null as File | null,
-    isActive: true
+    url: '',
+    image: null as File | null
   });
 
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('/banners/premium');
-      if (response.success && Array.isArray(response.data)) {
-        setBanners(response.data);
+      const response = await apiRequest('/home');
+      if (response.success && response.data) {
+        setHomeData(response.data);
       }
     } catch (error) {
       console.error('Error fetching premium banners:', error);
@@ -61,15 +65,12 @@ const PremiumBanner: React.FC = () => {
 
   const handleCreateBanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bannerForm.image) return;
+    if (!bannerForm.image || !bannerForm.url) return;
 
     try {
       setIsCreating(true);
       const formData = new FormData();
-      formData.append('title', bannerForm.title);
-      formData.append('description', bannerForm.description);
-      formData.append('linkUrl', bannerForm.linkUrl);
-      formData.append('isActive', String(bannerForm.isActive));
+      formData.append('url', bannerForm.url);
       formData.append('image', bannerForm.image);
 
       const response = await apiRequest('/banners/premium', {
@@ -85,11 +86,8 @@ const PremiumBanner: React.FC = () => {
           setShowSuccess(false);
           setShowCreateModal(false);
           setBannerForm({
-            title: '',
-            description: '',
-            linkUrl: '',
-            image: null,
-            isActive: true
+            url: '',
+            image: null
           });
           setPreviewUrl(null);
         }, 1500);
@@ -135,54 +133,70 @@ const PremiumBanner: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="space-y-4">
-          <div className="flex items-center mb-4">
-            <Crown className="w-6 h-6 text-purple-400 mr-3" />
-            <h2 className="text-xl font-semibold text-gray-900">Premium Banners</h2>
+      {/* Premium Banner URLs Section */}
+      {homeData?.premiumBannerUrls && homeData.premiumBannerUrls.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4">
+            <div className="flex items-center">
+              <Crown className="w-6 h-6 text-white mr-3" />
+              <h2 className="text-xl font-semibold text-white">Premium Banners</h2>
+            </div>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {banners.map((banner) => (
-              <div
-                key={banner.bannerId}
-                className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden group"
-              >
-                <div className="aspect-[16/9] overflow-hidden bg-gray-100">
-                  <img
-                    src={banner.imageUrl}
-                    alt={banner.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-gray-900">{banner.title}</h3>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        banner.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {banner.isActive ? 'Active' : 'Inactive'}
-                    </span>
+          <div className="p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {homeData.premiumBannerUrls.map((banner, index) => (
+                <div
+                  key={banner._id}
+                  className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300"
+                >
+                  <div className="aspect-[16/9] overflow-hidden bg-gray-100">
+                    <img
+                      src={banner.path}
+                      alt={`Premium Banner ${index + 1}`}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    />
                   </div>
-                  <p className="text-sm text-gray-600 line-clamp-2">{banner.description}</p>
-                  <a
-                    href={banner.linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
-                  >
-                    View Details →
-                  </a>
+                  <div className="p-4 space-y-3">
+                    {/* Path Information */}
+                    <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
+                      <Folder className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-purple-900 mb-1">Path</p>
+                        <p className="text-sm text-purple-800 break-all">{banner.path}</p>
+                      </div>
+                    </div>
+                    
+                    {/* URL Information */}
+                    <div className="flex items-start space-x-3 p-3 bg-pink-50 rounded-lg border-l-4 border-pink-500">
+                      <ExternalLink className="w-5 h-5 text-pink-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-pink-900 mb-1">URL</p>
+                        <a
+                          href={banner.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-pink-800 hover:text-pink-600 underline break-all"
+                        >
+                          {banner.url}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Crown className="w-8 h-8 text-purple-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Premium Banners</h3>
+          <p className="text-gray-500">There are currently no premium banners to display.</p>
+        </div>
+      )}
 
       {/* Create Premium Banner Modal */}
       {showCreateModal && (
@@ -201,38 +215,12 @@ const PremiumBanner: React.FC = () => {
             <form onSubmit={handleCreateBanner} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Banner Title
-                </label>
-                <input
-                  type="text"
-                  value={bannerForm.title}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={bannerForm.description}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Link URL
+                  Banner URL
                 </label>
                 <input
                   type="url"
-                  value={bannerForm.linkUrl}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, linkUrl: e.target.value }))}
+                  value={bannerForm.url}
+                  onChange={(e) => setBannerForm(prev => ({ ...prev, url: e.target.value }))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
                   placeholder="https://"
                   required
@@ -293,20 +281,6 @@ const PremiumBanner: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center bg-gray-50 p-4 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={bannerForm.isActive}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, isActive: e.target.checked }))}
-                  className="h-5 w-5 text-purple-600 focus:ring-purple-500 border-gray-300 rounded transition-colors"
-                />
-                <label htmlFor="isActive" className="ml-3">
-                  <span className="text-sm font-medium text-gray-700">Active Banner</span>
-                  <p className="text-xs text-gray-500">Banner will be displayed on the premium section</p>
-                </label>
-              </div>
-
               {showSuccess && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center animate-fade-in">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -327,7 +301,7 @@ const PremiumBanner: React.FC = () => {
                 <button
                   type="submit"
                   className="px-6 py-2.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center"
-                  disabled={showSuccess || !bannerForm.image || isCreating}
+                  disabled={showSuccess || !bannerForm.image || !bannerForm.url || isCreating}
                 >
                   {isCreating ? (
                     <>

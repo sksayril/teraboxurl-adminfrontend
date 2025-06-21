@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FolderOpen, LogOut, Menu, X, Image, Crown } from 'lucide-react';
+import { LayoutDashboard, Users, FolderOpen, LogOut, Menu, X, Image, Crown, TrendingUp, Link } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
-type TabType = 'dashboard' | 'categories' | 'users' | 'home-banners' | 'premium-banners';
+type TabType = 'dashboard' | 'categories' | 'users' | 'home-banners' | 'premium-banners' | 'top-data' | 'tera-link';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,6 +20,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'users', label: 'Users', icon: Users },
     { id: 'home-banners', label: 'Home Banners', icon: Image },
     { id: 'premium-banners', label: 'Premium Banners', icon: Crown },
+    { id: 'top-data', label: 'Top Data', icon: TrendingUp },
+    { id: 'tera-link', label: 'TeraLink', icon: Link },
   ] as const;
 
   return (
