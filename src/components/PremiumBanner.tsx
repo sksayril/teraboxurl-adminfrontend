@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, Crown, Image as ImageIcon, Folder, ExternalLink } from 'lucide-react';
+import { Plus, X, Crown, Image as ImageIcon, Folder, ExternalLink, Trash2 } from 'lucide-react';
 import { apiRequest } from '../utils/api';
 
 interface PremiumBannerData {
@@ -41,12 +41,15 @@ const PremiumBanner: React.FC = () => {
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [selectedBannerIndex, setSelectedBannerIndex] = useState<number | null>(null);
   const [bannerForm, setBannerForm] = useState({
-    url: '',
-    image: null as File | null
+    urls: [''],
+    images: [] as File[]
   });
 
   const fetchBanners = async () => {
@@ -65,15 +68,23 @@ const PremiumBanner: React.FC = () => {
 
   const handleCreateBanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bannerForm.image || !bannerForm.url) return;
+    if (bannerForm.images.length === 0) return;
 
     try {
       setIsCreating(true);
       const formData = new FormData();
-      formData.append('url', bannerForm.url);
-      formData.append('image', bannerForm.image);
+      
+      // Add each image with the field name 'banners'
+      bannerForm.images.forEach((image) => {
+        formData.append('banners', image);
+      });
+      
+      // Add URLs array
+      bannerForm.urls.forEach((url, index) => {
+        formData.append('urls', url || 'http://');
+      });
 
-      const response = await apiRequest('/banners/premium', {
+      const response = await apiRequest('/home/premium-banner', {
         method: 'POST',
         body: formData,
         headers: {}
@@ -86,10 +97,10 @@ const PremiumBanner: React.FC = () => {
           setShowSuccess(false);
           setShowCreateModal(false);
           setBannerForm({
-            url: '',
-            image: null
+            urls: [''],
+            images: []
           });
-          setPreviewUrl(null);
+          setPreviewUrls([]);
         }, 1500);
       }
     } catch (error) {
@@ -100,11 +111,71 @@ const PremiumBanner: React.FC = () => {
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      setBannerForm(prev => ({ ...prev, image: file }));
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setBannerForm(prev => ({ 
+        ...prev, 
+        images: [...prev.images, ...files],
+        urls: [...prev.urls, ...Array(files.length).fill('')]
+      }));
+      
+      // Show previews of all images
+      const newPreviewUrls = files.map(file => URL.createObjectURL(file));
+      setPreviewUrls(prev => [...prev, ...newPreviewUrls]);
+    }
+  };
+
+  const addUrlField = () => {
+    setBannerForm(prev => ({
+      ...prev,
+      urls: [...prev.urls, '']
+    }));
+  };
+
+  const removeUrlField = (index: number) => {
+    setBannerForm(prev => ({
+      ...prev,
+      urls: prev.urls.filter((_, i) => i !== index),
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateUrl = (index: number, value: string) => {
+    setBannerForm(prev => ({
+      ...prev,
+      urls: prev.urls.map((url, i) => i === index ? value : url)
+    }));
+  };
+
+  const handleDeleteBanner = (bannerIndex: number) => {
+    setSelectedBannerIndex(bannerIndex);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedBannerIndex === null) return;
+
+    try {
+      setIsDeleting(true);
+      const response = await apiRequest('/home/delete-premium-banner', {
+        method: 'POST',
+        body: JSON.stringify({ bannerIndex: selectedBannerIndex }),
+      });
+
+      if (response.success) {
+        setShowSuccess(true);
+        fetchBanners(); // Refresh the data
+        setTimeout(() => {
+          setShowSuccess(false);
+          setShowDeleteModal(false);
+          setSelectedBannerIndex(null);
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('Error deleting premium banner:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -148,8 +219,17 @@ const PremiumBanner: React.FC = () => {
               {homeData.premiumBannerUrls.map((banner, index) => (
                 <div
                   key={banner._id}
-                  className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300"
+                  className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300 relative group"
                 >
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => handleDeleteBanner(index)}
+                    className="absolute top-3 right-3 z-10 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                    title="Delete banner"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+
                   <div className="aspect-[16/9] overflow-hidden bg-gray-100">
                     <img
                       src={banner.path}
@@ -215,69 +295,120 @@ const PremiumBanner: React.FC = () => {
             <form onSubmit={handleCreateBanner} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Banner URL
+                  Banner URLs & Images
                 </label>
-                <input
-                  type="url"
-                  value={bannerForm.url}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, url: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                  placeholder="https://"
-                  required
-                />
+                <div className="space-y-4">
+                  {bannerForm.urls.map((url, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium text-gray-700">Banner {index + 1}</h4>
+                        {bannerForm.urls.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeUrlField(index)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Remove banner"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            URL
+                          </label>
+                          <input
+                            type="url"
+                            value={url}
+                            onChange={(e) => updateUrl(index, e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            placeholder="https://"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Image
+                          </label>
+                          <div className="relative">
+                            {previewUrls[index] ? (
+                              <div className="relative group">
+                                <img
+                                  src={previewUrls[index]}
+                                  alt={`Preview ${index + 1}`}
+                                  className="w-full h-20 object-cover rounded-md"
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newPreviewUrls = [...previewUrls];
+                                      newPreviewUrls[index] = '';
+                                      setPreviewUrls(newPreviewUrls);
+                                      const newImages = [...bannerForm.images];
+                                      newImages[index] = null as any;
+                                      setBannerForm(prev => ({ ...prev, images: newImages }));
+                                    }}
+                                    className="text-white hover:text-red-500 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-20 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center bg-white">
+                                <span className="text-xs text-gray-500">No image selected</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button
+                    type="button"
+                    onClick={addUrlField}
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-700 hover:border-gray-400 transition-colors flex items-center justify-center"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Another Banner
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Banner Image
+                  Upload Images
                 </label>
-                <div className="relative border-2 border-dashed rounded-lg p-4 transition-colors hover:border-gray-400">
-                  {previewUrl ? (
-                    <div className="relative group">
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="w-full aspect-[16/9] object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPreviewUrl(null);
-                            setBannerForm(prev => ({ ...prev, image: null }));
-                          }}
-                          className="text-white hover:text-red-500 transition-colors"
-                        >
-                          <X className="w-8 h-8" />
-                        </button>
+                <div className="relative border-2 border-dashed rounded-lg p-6 transition-colors hover:border-gray-400">
+                  <div className="text-center">
+                    <input
+                      type="file"
+                      onChange={handleImageChange}
+                      accept="image/*"
+                      className="hidden"
+                      id="premium-banner-images"
+                      multiple
+                    />
+                    <label
+                      htmlFor="premium-banner-images"
+                      className="cursor-pointer inline-flex flex-col items-center"
+                    >
+                      <div className="p-3 bg-purple-100 rounded-lg text-purple-500 mb-3">
+                        <Plus className="w-6 h-6" />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <input
-                        type="file"
-                        onChange={handleImageChange}
-                        accept="image/*"
-                        className="hidden"
-                        id="premium-banner-image"
-                        required
-                      />
-                      <label
-                        htmlFor="premium-banner-image"
-                        className="cursor-pointer inline-flex flex-col items-center"
-                      >
-                        <div className="p-3 bg-purple-100 rounded-lg text-purple-500 mb-3">
-                          <Plus className="w-6 h-6" />
-                        </div>
-                        <span className="text-sm font-medium text-gray-700">
-                          Click to upload banner image
-                        </span>
-                        <span className="text-xs text-gray-500 mt-1">
-                          Recommended: 1920x1080 px
-                        </span>
-                      </label>
-                    </div>
-                  )}
+                      <span className="text-sm font-medium text-gray-700">
+                        Click to upload banner images
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        You can select multiple images (up to 5)
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -286,7 +417,7 @@ const PremiumBanner: React.FC = () => {
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span className="text-green-700">Banner created successfully!</span>
+                  <span className="text-green-700">Banners created successfully!</span>
                 </div>
               )}
 
@@ -301,7 +432,7 @@ const PremiumBanner: React.FC = () => {
                 <button
                   type="submit"
                   className="px-6 py-2.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center"
-                  disabled={showSuccess || !bannerForm.image || !bannerForm.url || isCreating}
+                  disabled={showSuccess || bannerForm.images.length === 0 || isCreating}
                 >
                   {isCreating ? (
                     <>
@@ -311,12 +442,100 @@ const PremiumBanner: React.FC = () => {
                   ) : (
                     <>
                       <Plus className="w-4 h-4 mr-2" />
-                      Create Premium Banner
+                      Create Premium Banners
                     </>
                   )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedBannerIndex !== null && homeData?.premiumBannerUrls && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-red-600">Delete Premium Banner</h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="ml-4">
+                  <h4 className="text-lg font-medium text-gray-900">
+                    Are you sure?
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={homeData.premiumBannerUrls[selectedBannerIndex].path}
+                    alt={`Banner ${selectedBannerIndex + 1}`}
+                    className="h-12 w-20 object-cover rounded-lg"
+                  />
+                  <div>
+                    <p className="font-medium text-gray-900">Premium Banner {selectedBannerIndex + 1}</p>
+                    <p className="text-sm text-gray-500">This banner will be permanently removed</p>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-gray-700">
+                You are about to delete this premium banner. This action will permanently remove the banner from your collection.
+              </p>
+            </div>
+
+            {showSuccess && (
+              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
+                <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-green-700">Banner deleted successfully!</span>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
+                disabled={showSuccess || isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <LoadingSpinner />
+                    <span className="ml-2">Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Banner
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
