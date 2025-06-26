@@ -1,5 +1,5 @@
-// const API_BASE_URL = 'https://api.firstwin.top';
-const API_BASE_URL = 'http://localhost:3910';
+const API_BASE_URL = 'https://api.firstwin.top';
+// const API_BASE_URL = 'http://localhost:3910';
 
 export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('admin_token');
